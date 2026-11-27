@@ -745,6 +745,60 @@ def _cols_for(payload):
     return up, meta, cols, problems
 
 
+def api_check_rows(payload):
+    """快速逐行必填检查：不解析人员、不校验选项，只判断空不空。"""
+    up, meta, cols, problems = _cols_for(payload)
+    if not cols:
+        return err("还没有做列映射")
+    items, _m = form_items(meta, CFG["project_key"], CFG["work_item_type"])
+    profiles = (get_profiles(meta, CFG["project_key"], CFG["work_item_type"], items)
+                .get("profiles") or {})
+    rows = _apply_relations(up["rows"], cols, payload.get("overrides") or {})
+    rows = _apply_relations(rows, cols, payload.get("relations") or {})
+    type_col = next((c for c in cols.values() if c["field_key"] == "field_8e9f64"), None)
+    by_key = {c["field_key"]: c for c in cols.values() if c.get("kind") == "field"}
+    role_cols = [c for c in cols.values() if c.get("kind") == "role"]
+    force = {"name", "template", "field_8e9f64"}
+    out = []
+    for i, row in enumerate(rows):
+        type_raw = ""
+        oid = ""
+        if type_col:
+            cell = row[type_col["index"]] if type_col["index"] < len(row) else None
+            type_raw = core.cell_str(cell)
+            oid = type_col["options"].get(core.norm_name(type_raw), type_raw)
+        prof = profiles.get(oid) or {}
+        req = set(prof.get("required") or []) | force
+        if not profiles:
+            req |= {k for k, c in by_key.items() if c.get("required")}
+        missing = []
+        for key in sorted(req):
+            c = by_key.get(key)
+            if not c:
+                missing.append({"field_key": key, "field_name": key,
+                                "kind": "field", "reason": "未映射"})
+                continue
+            cell = row[c["index"]] if c["index"] < len(row) else None
+            if not core.cell_str(cell).strip() and not c.get("default"):
+                missing.append({"field_key": key, "field_name": c["field_name"],
+                                "kind": "field", "reason": "必填为空"})
+        for c in role_cols:
+            if not c.get("required"):
+                continue
+            cell = row[c["index"]] if c["index"] < len(row) else None
+            if not core.cell_str(cell).strip():
+                missing.append({"field_key": c["field_key"], "field_name": c["field_name"],
+                                "kind": "role", "reason": "必填为空"})
+        out.append({
+            "index": i, "row": i + 2,
+            "title": core.cell_str(row[0]) if row else "",
+            "type": type_raw or "（未填）",
+            "missing": missing, "missing_count": len(missing),
+        })
+    return ok({"rows": out, "problems": problems,
+               "profiles_ready": bool(profiles)})
+
+
 def api_validate(payload):
     up, meta, cols, problems = _cols_for(payload)
     if not cols:
@@ -755,8 +809,10 @@ def api_validate(payload):
                 .get("profiles") or {})
     type_col = next((c for c in cols.values() if c["field_key"] == "field_8e9f64"), None)
     mapped_keys = {c["field_key"] for c in cols.values() if c.get("kind") == "field"}
+    overrides = payload.get("overrides") or {}
+    rows = _apply_relations(up["rows"], cols, overrides)
     rels_in = payload.get("relations") or {}
-    rows = _apply_relations(up["rows"], cols, rels_in)
+    rows = _apply_relations(rows, cols, rels_in)
     applied_relations = sum(len(m or {}) for m in rels_in.values())
     issues, valid = [], 0
     for r, row in enumerate(rows):
@@ -782,9 +838,9 @@ def api_validate(payload):
             if required_keys is not None and c.get("kind") == "field":
                 is_req = c["field_key"] in required_keys
             if not good:
-                row_err.append({"col": h, "msg": e})
+                row_err.append({"col": h, "field_key": c.get("field_key") or h, "msg": e})
             elif is_req and val in (None, "") and not c.get("default"):
-                row_err.append({"col": h, "msg": "必填为空"})
+                row_err.append({"col": h, "field_key": c.get("field_key") or h, "msg": "必填为空"})
         if row_err:
             issues.append({"row": r + 2, "title": row[0] if row else "", "errors": row_err})
         else:
@@ -800,12 +856,16 @@ def api_run(payload):
         return err("还没有做列映射")
     if problems:
         return err("；".join(problems))
-    # 网页「关联字段」里选的值要覆盖到行数据，否则执行时还是空
+    # 网页里补填/关联选择的值要覆盖到行数据，否则执行时还是空
+    overrides = payload.get("overrides") or {}
     rels = payload.get("relations") or {}
     applied = 0
+    if overrides:
+        up = {**up, "rows": _apply_relations(up["rows"], cols, overrides)}
+        applied += sum(len(m or {}) for m in overrides.values())
     if rels:
         up = {**up, "rows": _apply_relations(up["rows"], cols, rels)}
-        applied = sum(len(m or {}) for m in rels.values())
+        applied += sum(len(m or {}) for m in rels.values())
     job_id = secrets.token_hex(4)
     job = {
         "id": job_id,
@@ -821,7 +881,7 @@ def api_run(payload):
         "applied_relations": applied,
     }
     if applied:
-        job["logs"].append(f"已应用 {applied} 个网页关联字段选择")
+        job["logs"].append(f"已应用 {applied} 个网页补填/关联选择")
     # 问题管理类型（模板）是创单必填项：界面没选就按布局默认值兜底
     tpl_name = (payload.get("template_name") or "").strip()
     items, _m = form_items(meta, CFG["project_key"], CFG["work_item_type"])
@@ -1068,6 +1128,7 @@ ROUTES = {
     "/api/relation_options": api_relation_options,
     "/api/upload": api_upload,
     "/api/validate": api_validate,
+    "/api/check_rows": api_check_rows,
     "/api/run": api_run,
     "/api/job": api_job,
     "/api/stop": api_stop,

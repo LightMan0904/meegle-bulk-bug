@@ -99,8 +99,8 @@
 
   <section class="card locked" id="card5">
     <div class="card-head">
-      <span class="num">5</span><h2>列映射</h2>
-      <span class="hint">表头 → 空间字段，自动匹配后可手工调整</span>
+      <span class="num">5</span><h2>列映射与逐行检查</h2>
+      <span class="hint">表头 → 空间字段；下方逐行检查必填项，可直接补填</span>
     </div>
     <div class="row">
       <button class="btn small" id="btnRemap">重新自动匹配</button>
@@ -110,22 +110,28 @@
       <table class="tbl" id="mapTable"></table>
     </div>
 
-    <div class="hidden" id="relBox" style="margin-top:14px">
-      <div class="row">
-        <h3 style="margin:0;font-size:14px">关联字段（可直接搜索选择）</h3>
-        <span class="msg">输入关键字搜索空间里的工作项，选中后自动填工作项 ID</span>
+    <div class="hidden" id="rowCheckBox" style="margin-top:16px">
+      <div class="rowcheck-head">
+        <h3>逐行检查 <span class="msg" id="checkSummary"></span></h3>
+        <div class="rowcheck-tools">
+          <input id="rowFilter" placeholder="按标题 / 关联字段过滤…" autocomplete="off">
+          <label class="check-inline"><input type="checkbox" id="rowSelectAll"> 全选</label>
+          <span class="msg" id="rowSelCount">已选 0 行</span>
+          <button class="btn small" id="btnBulkEdit" disabled>批量修改</button>
+        </div>
       </div>
-      <div class="table-wrap">
-        <table class="tbl" id="relTable"></table>
+      <div class="table-wrap" id="rowCheckWrap">
+        <table class="tbl" id="rowCheckTable"></table>
       </div>
-      <datalist id="relList"></datalist>
+      <div id="rowEditor" class="row-editor hidden"></div>
+      <span class="msg" id="rowCheckMsg"></span>
     </div>
   </section>
 
   <section class="card locked" id="card6">
     <div class="card-head">
       <span class="num">6</span><h2>校验</h2>
-      <span class="hint">不写数据，只检查必填/枚举/人员</span>
+      <span class="hint">不写数据；在逐行预检之外，再校验选项、人员、机型层级</span>
     </div>
     <div class="row">
       <button class="btn" id="btnValidate">开始校验</button>
@@ -203,6 +209,23 @@
       <button class="btn primary" id="btnCloseLogin2">关闭</button>
     </div>
     <p class="modal-tip">二维码 30 分钟内有效。如果手机扫不出来，点「在浏览器打开授权页」，输入上面的验证码也能完成登录。</p>
+  </div>
+</div>
+
+<div class="modal hidden" id="bulkModal">
+  <div class="modal-mask" id="bulkMask"></div>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>批量修改关联字段</h3>
+      <span class="msg" id="bulkCount"></span>
+    </div>
+    <p class="modal-tip">只修改下面填了内容的字段；留空表示不改。输入关键字会搜索飞书里的真实工作项。</p>
+    <div id="bulkFields" class="bulk-fields"></div>
+    <datalist id="bulkList"></datalist>
+    <div class="modal-actions">
+      <button class="btn" id="bulkCancel">取消</button>
+      <button class="btn primary" id="bulkConfirm">确认修改</button>
+    </div>
   </div>
 </div>
 

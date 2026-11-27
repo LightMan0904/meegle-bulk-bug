@@ -6,6 +6,8 @@ const state = {
   upload: null, mapping: {}, autoMapping: {},
   jobId: "", timer: null, file: null,
   fieldOrder: [], defaultOrder: [], relations: {}, relCache: {}, relComplete: {},
+  overrides: {}, selectedRows: new Set(), rowFilter: "", rowCheck: [], checkSeq: 0,
+  checkTimer: null, editorRow: null, rowBound: false,
 };
 
 /* ---------------- 基础 ---------------- */
@@ -477,6 +479,11 @@ async function onFile(file, sheet) {
     });
     state.upload = d;
     state.relations = {};
+    state.overrides = {};
+    state.selectedRows = new Set();
+    state.rowFilter = "";
+    state.rowCheck = [];
+    state.editorRow = null;
     state.mapping = { ...d.mapping };
     state.autoMapping = { ...d.mapping };
 
@@ -502,7 +509,8 @@ function renderPreview() {
   const d = state.upload;
   if (!d) return;
   const head = d.headers.map((h, i) => `<th>${esc(h || "列" + (i + 1))}</th>`).join("");
-  const body = d.preview.map((r) => "<tr>" + d.headers.map((_, i) =>
+  const all = d.rows || d.preview || [];
+  const body = all.map((r) => "<tr>" + d.headers.map((_, i) =>
     `<td class="sample">${esc(r[i] || "")}</td>`).join("") + "</tr>").join("");
   $("previewTable").innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
   $("previewWrap").classList.remove("hidden");
@@ -549,7 +557,7 @@ function renderMapping() {
     });
   });
   updateMapMsg();
-  renderRelations();
+  renderRowCheck();
 }
 
 function cellText(v) {
@@ -671,6 +679,347 @@ function remap() {
   renderMapping();
 }
 
+/* ---------------- 5.5 逐行检查 / 行内编辑 / 批量修改 ---------------- */
+
+function fieldByKey(key) {
+  return ((state.meta && state.meta.items) || []).find((it) => it.field_key === key);
+}
+
+function relationFields() {
+  return ((state.meta && state.meta.items) || []).filter(
+    (it) => it.kind === "field" && (it.related || []).length && it.writable !== false);
+}
+
+function mappedIndex(key) {
+  for (const [i, k] of Object.entries(state.mapping)) {
+    if (k === key) return Number(i);
+  }
+  return -1;
+}
+
+function rowValue(index, key) {
+  const o = state.overrides[String(index)];
+  if (o && Object.prototype.hasOwnProperty.call(o, key)) return o[key];
+  const ci = mappedIndex(key);
+  if (ci < 0 || !state.upload) return "";
+  const row = state.upload.rows[index] || [];
+  return row[ci] == null ? "" : String(row[ci]);
+}
+
+function setOverride(index, key, value) {
+  const r = String(index);
+  state.overrides[r] = state.overrides[r] || {};
+  const s = value == null ? "" : String(value).trim();
+  if (s) state.overrides[r][key] = s;
+  else delete state.overrides[r][key];
+  if (!Object.keys(state.overrides[r]).length) delete state.overrides[r];
+  scheduleCheck();
+}
+
+function scheduleCheck() {
+  clearTimeout(state.checkTimer);
+  state.checkTimer = setTimeout(refreshRowCheck, 350);
+}
+
+function rowSearchText(r) {
+  let t = (r.title || "") + " " + (r.type || "");
+  for (const f of relationFields()) t += " " + rowValue(r.index, f.field_key);
+  return t.toLowerCase();
+}
+
+async function refreshRowCheck() {
+  if (!state.upload || !state.meta) return;
+  const seq = ++state.checkSeq;
+  msg("rowCheckMsg", "检查必填项…");
+  try {
+    const d = await api("/api/check_rows", {
+      upload_id: state.upload.upload_id, mapping: state.mapping,
+      overrides: state.overrides,
+    });
+    if (seq !== state.checkSeq) return;
+    state.rowCheck = d.rows || [];
+    renderRowCheckTable();
+    msg("rowCheckMsg", d.profiles_ready ? "" : "必填规则首次加载中，稍后再看…", d.profiles_ready ? "ok" : "warn");
+  } catch (e) {
+    if (seq === state.checkSeq) msg("rowCheckMsg", e.message, "bad");
+  }
+}
+
+function renderRowCheck() {
+  const box = $("rowCheckBox");
+  if (!box) return;
+  if (!state.upload || !state.meta) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  if (!state.rowBound) { bindRowCheckOnce(); state.rowBound = true; }
+  refreshRowCheck();
+}
+
+function renderRowCheckTable() {
+  const all = state.rowCheck || [];
+  const filter = state.rowFilter.trim().toLowerCase();
+  const visible = all.filter((r) => !filter || rowSearchText(r).includes(filter));
+  const head = `<thead><tr>
+    <th><input type="checkbox" id="rowCheckAll"></th><th>行</th><th>标题</th>
+    <th>测试单类型</th><th>缺失必填</th><th></th></tr></thead>`;
+  const body = visible.map((r) => {
+    const picked = state.selectedRows.has(r.index) ? " picked" : "";
+    const bad = r.missing_count ? " bad" : "";
+    const miss = r.missing.length
+      ? r.missing.map((m) => `<span class="miss-tag">${esc(m.field_name)}</span>`).join("")
+      : '<span class="ok-tag">完整</span>';
+    return `<tr class="${picked}${bad}" data-row="${r.index}">
+      <td class="sel"><input type="checkbox" class="row-pick" data-index="${r.index}" ${picked ? "checked" : ""}></td>
+      <td>${r.row}</td>
+      <td class="sample"><a href="javascript:void 0" class="row-title" data-index="${r.index}">${esc(r.title || "")}</a></td>
+      <td>${esc(r.type || "")}</td>
+      <td class="status">${miss}</td>
+      <td><button class="btn small row-edit" data-index="${r.index}">编辑</button></td>
+    </tr>`;
+  }).join("");
+  $("rowCheckTable").innerHTML = head + `<tbody>${body || '<tr><td colspan="6" class="muted">没有匹配的 BUG</td></tr>'}</tbody>`;
+  const missing = all.filter((r) => r.missing_count).length;
+  $("checkSummary").textContent = `共 ${all.length} 行，${missing} 行缺必填`;
+  $("rowSelCount").textContent = `已选 ${state.selectedRows.size} 行`;
+  $("btnBulkEdit").disabled = state.selectedRows.size === 0;
+  const selAll = $("rowCheckAll");
+  if (selAll) {
+    const picked = visible.filter((r) => state.selectedRows.has(r.index)).length;
+    selAll.checked = visible.length > 0 && picked === visible.length;
+  }
+  $("rowSelectAll").checked = visible.length > 0 &&
+    visible.every((r) => state.selectedRows.has(r.index));
+}
+
+function bindRowCheckOnce() {
+  $("rowFilter").addEventListener("input", () => {
+    state.rowFilter = $("rowFilter").value;
+    renderRowCheckTable();
+  });
+  $("rowSelectAll").addEventListener("change", () => {
+    const on = $("rowSelectAll").checked;
+    const filter = state.rowFilter.trim().toLowerCase();
+    const visible = (state.rowCheck || []).filter((r) => !filter || rowSearchText(r).includes(filter));
+    for (const r of visible) {
+      if (on) state.selectedRows.add(r.index); else state.selectedRows.delete(r.index);
+    }
+    renderRowCheckTable();
+  });
+  $("btnBulkEdit").addEventListener("click", openBulk);
+  $("bulkCancel").addEventListener("click", closeBulk);
+  $("bulkMask").addEventListener("click", closeBulk);
+  $("bulkConfirm").addEventListener("click", confirmBulk);
+  $("rowCheckTable").addEventListener("change", (e) => {
+    if (!e.target.classList.contains("row-pick")) return;
+    const i = Number(e.target.dataset.index);
+    if (e.target.checked) state.selectedRows.add(i); else state.selectedRows.delete(i);
+    renderRowCheckTable();
+  });
+  $("rowCheckTable").addEventListener("click", (e) => {
+    const el = e.target.closest(".row-title, .row-edit");
+    if (el) openRowEditor(Number(el.dataset.index));
+  });
+  $("rowCheckTable").addEventListener("change", (e) => {
+    if (e.target.id !== "rowCheckAll") return;
+    const visible = (state.rowCheck || []).filter((r) =>
+      !state.rowFilter || rowSearchText(r).includes(state.rowFilter.trim().toLowerCase()));
+    for (const r of visible) {
+      if (e.target.checked) state.selectedRows.add(r.index); else state.selectedRows.delete(r.index);
+    }
+    renderRowCheckTable();
+  });
+}
+
+function controlHtml(it, index, val) {
+  const key = esc(it.field_key);
+  const ft = String(it.field_type || "");
+  const role = it.kind === "role";
+  if (role) return `<input data-key="${key}" value="${esc(val)}" placeholder="姓名或企业邮箱">`;
+  if ((it.related || []).length) {
+    const rel = it.related[0] || {};
+    return `<input class="edit-rel" data-key="${key}" data-project="${esc(rel.project_key || "")}"
+      data-target="${esc(rel.work_item_type || "")}" value="${esc(val)}"
+      placeholder="搜索工作项…" autocomplete="off">`;
+  }
+  if (ft === "multi-file") return `<input value="不可导入" disabled>`;
+  if (ft === "tree-select" || ft === "tree-multi-select") {
+    const leaves = (it.options || []).filter((o) => o.path && o.path.length);
+    if (leaves.length) return `<div class="tree-cascade" data-tree-key="${key}"></div>`;
+  }
+  if (ft.includes("select") || ft.includes("option") || ft.includes("template") || it.field_key === "template") {
+    const opts = it.options || [];
+    if (ft.includes("multi")) {
+      const cur = val.split(/[,，、;；/|]+/).map((s) => s.trim()).filter(Boolean);
+      return `<select data-key="${key}" multiple size="4">${opts.map((o) =>
+        `<option value="${esc(o.label)}" ${cur.includes(o.label) ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
+    }
+    return `<select data-key="${key}"><option value="">请选择</option>${opts.map((o) =>
+      `<option value="${esc(o.label)}" ${o.label === val ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
+  }
+  if (ft === "multi-text") return `<textarea data-key="${key}" placeholder="多个用换行分隔">${esc(val)}</textarea>`;
+  return `<input data-key="${key}" value="${esc(val)}">`;
+}
+
+function initTree(box, item, index) {
+  const key = item.field_key;
+  const leaves = (item.options || []).filter((o) => o.path && o.path.length);
+  const depth = Math.max(...leaves.map((o) => o.path.length));
+  const cur = rowValue(index, key);
+  const curPath = (leaves.find((o) => o.label === cur) || {}).path || null;
+  box.innerHTML = Array.from({ length: depth }, (_, level) =>
+    `<select data-level="${level}"></select>`).join("");
+  const fill = (level, prefix) => {
+    const sel = box.querySelector(`[data-level="${level}"]`);
+    if (!sel) return;
+    const labels = [];
+    for (const o of leaves) {
+      if (!prefix.every((x, i) => o.path[i] && o.path[i].label === x)) continue;
+      const lab = o.path[level] && o.path[level].label;
+      if (lab && !labels.includes(lab)) labels.push(lab);
+    }
+    sel.innerHTML = '<option value="">请选择</option>' +
+      labels.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join("");
+    if (curPath && curPath[level]) sel.value = curPath[level].label;
+    else sel.value = "";
+  };
+  fill(0, []);
+  if (curPath && curPath[0]) {
+    for (let level = 1; level < depth; level += 1) {
+      fill(level, curPath.slice(0, level).map((p) => p.label));
+    }
+    for (let level = 0; level < depth; level += 1) {
+      const sel = box.querySelector(`[data-level="${level}"]`);
+      if (sel && curPath[level]) sel.value = curPath[level].label;
+    }
+  }
+  box.addEventListener("change", (e) => {
+    const level = Number(e.target.dataset.level);
+    const labels = [];
+    for (let i = 0; i <= level; i += 1) {
+      const v = box.querySelector(`[data-level="${i}"]`).value;
+      if (!v) break;
+      labels.push(v);
+    }
+    for (let i = level + 1; i < depth; i += 1) {
+      box.querySelector(`[data-level="${i}"]`).innerHTML = '<option value="">请选择</option>';
+    }
+    if (labels.length === level + 1 && level < depth - 1) fill(level + 1, labels);
+    if (labels.length === depth) setOverride(index, key, labels[depth - 1]);
+  });
+}
+
+function openRowEditor(index, keepScroll) {
+  if (!state.upload || !state.meta) return;
+  state.editorRow = index;
+  const row = state.upload.rows[index] || [];
+  const title = row[0] == null ? "" : String(row[0]);
+  const items = state.meta.items || [];
+  const html = items.map((it) => {
+    const val = rowValue(index, it.field_key);
+    return `<div class="field-edit"><label>${esc(it.field_name)}${it.required ? ' <span class="req">*</span>' : ""}</label>${controlHtml(it, index, val)}</div>`;
+  }).join("");
+  const box = $("rowEditor");
+  box.innerHTML = `<div class="row-editor-head"><b>第 ${index + 2} 行：${esc(title)}</b>
+    <button class="btn small" id="rowEditClose">收起</button></div>
+    <div class="row-editor-grid">${html}</div><datalist id="editRelList"></datalist>`;
+  box.classList.remove("hidden");
+  if (!keepScroll) box.scrollIntoView({ block: "nearest" });
+  $("rowEditClose").onclick = () => { state.editorRow = null; box.classList.add("hidden"); box.innerHTML = ""; };
+
+  box.querySelectorAll("[data-tree-key]").forEach((el) => {
+    const item = fieldByKey(el.dataset.treeKey);
+    if (item) initTree(el, item, index);
+  });
+  box.querySelectorAll("[data-key]").forEach((el) => {
+    if (el.classList.contains("edit-rel")) bindEditRel(el, index);
+    el.addEventListener("change", () => {
+      let v = el.value;
+      if (el.multiple) v = [...el.selectedOptions].map((o) => o.value).join(",");
+      setOverride(index, el.dataset.key, v);
+    });
+  });
+}
+
+function bindEditRel(inp, index) {
+  let timer = null;
+  const load = async () => {
+    try {
+      const d = await api("/api/relation_options", {
+        project_key: inp.dataset.project, target_type: inp.dataset.target,
+        q: inp.value.trim(),
+      });
+      $("editRelList").innerHTML = (d.items || []).map((o) =>
+        `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join("");
+      inp.setAttribute("list", "editRelList");
+    } catch (e) { /* ignore */ }
+  };
+  inp.addEventListener("focus", load);
+  inp.addEventListener("input", () => {
+    inp.setAttribute("list", "editRelList");
+    clearTimeout(timer);
+    timer = setTimeout(load, 250);
+  });
+}
+
+function openBulk() {
+  if (!state.selectedRows.size) return;
+  const fields = relationFields();
+  if (!fields.length) { msg("rowCheckMsg", "没有可批量修改的关联字段", "warn"); return; }
+  $("bulkCount").textContent = `将修改已选中的 ${state.selectedRows.size} 行`;
+  $("bulkFields").innerHTML = fields.map((it) => `<div class="bulk-field">
+    <label>${esc(it.field_name)}</label>
+    <div class="bulk-line">
+      <input class="bulk-rel" data-key="${esc(it.field_key)}"
+        data-project="${esc((it.related[0] || {}).project_key || "")}"
+        data-target="${esc((it.related[0] || {}).work_item_type || "")}"
+        placeholder="输入关键字搜索飞书工作项…" autocomplete="off">
+      <button type="button" class="btn small bulk-search">搜索</button>
+    </div>
+  </div>`).join("");
+  $("bulkList").innerHTML = "";
+  $("bulkFields").querySelectorAll(".bulk-rel").forEach(bindBulkRel);
+  $("bulkFields").querySelectorAll(".bulk-search").forEach((btn) => {
+    btn.addEventListener("click", () => btn.parentElement.querySelector(".bulk-rel").focus());
+  });
+  $("bulkModal").classList.remove("hidden");
+}
+
+function bindBulkRel(inp) {
+  let timer = null;
+  const load = async () => {
+    try {
+      const d = await api("/api/relation_options", {
+        project_key: inp.dataset.project, target_type: inp.dataset.target,
+        q: inp.value.trim(),
+      });
+      $("bulkList").innerHTML = (d.items || []).map((o) =>
+        `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join("");
+      inp.setAttribute("list", "bulkList");
+    } catch (e) { /* ignore */ }
+  };
+  inp.addEventListener("focus", load);
+  inp.addEventListener("input", () => {
+    inp.setAttribute("list", "bulkList");
+    clearTimeout(timer);
+    timer = setTimeout(load, 250);
+  });
+}
+
+function closeBulk() { $("bulkModal").classList.add("hidden"); }
+
+function confirmBulk() {
+  const vals = [];
+  $("bulkFields").querySelectorAll(".bulk-rel").forEach((inp) => {
+    if (inp.value.trim()) vals.push([inp.dataset.key, inp.value.trim()]);
+  });
+  if (!vals.length) { closeBulk(); return; }
+  for (const idx of state.selectedRows) {
+    for (const [key, value] of vals) setOverride(idx, key, value);
+  }
+  closeBulk();
+  if (state.editorRow != null) openRowEditor(state.editorRow, true);
+  refreshRowCheck();
+}
+
 /* ---------------- 6. 校验 ---------------- */
 
 async function validate() {
@@ -678,7 +1027,7 @@ async function validate() {
   $("btnValidate").disabled = true;
   msg("validateMsg", "校验中（人员字段需要联网解析）…");
   try {
-    const d = await api("/api/validate", { upload_id: state.upload.upload_id, mapping: state.mapping, relations: state.relations });
+    const d = await api("/api/validate", { upload_id: state.upload.upload_id, mapping: state.mapping, overrides: state.overrides });
     $("issuesBox").classList.remove("hidden");
     if (!d.issue_rows) {
       $("issuesBox").innerHTML = `<div class="issue s-ok">全部 ${d.valid_rows} 行通过校验，可以执行了。</div>`;
@@ -705,7 +1054,7 @@ async function start() {
   const body = {
     upload_id: state.upload.upload_id,
     mapping: state.mapping,
-    relations: state.relations,
+    overrides: state.overrides,
     dry_run: dry,
     delay: parseFloat($("delayInput").value || "0.4"),
     limit: parseInt($("limitInput").value || "0", 10),

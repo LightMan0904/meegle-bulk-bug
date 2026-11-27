@@ -197,3 +197,35 @@ input[type=file] { font-size: 13px; }
 }
 .tag.gray { background: #eef0f3; color: #646a73; }
 .tag.warn { background: #fff3e8; color: #de7802; }
+/* 逐行检查 / 行内编辑 / 批量修改 */
+.rowcheck-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.rowcheck-head h3 { font-size:14px; margin:0; }
+.rowcheck-tools { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#rowFilter { height:30px; width:260px; padding:0 8px; border:1px solid var(--line); border-radius:6px; font-size:13px; }
+.check-inline { font-size:12px; color:var(--sub); display:flex; align-items:center; gap:4px; }
+#rowCheckWrap { max-height:330px; }
+#rowCheckTable { min-width:760px; }
+#rowCheckTable td.sel { width:30px; text-align:center; }
+#rowCheckTable td.status { white-space:nowrap; }
+#rowCheckTable tr.picked td { background:#f3f7ff; }
+#rowCheckTable tr.bad td.status { color:var(--red); }
+.miss-tag { display:inline-block; background:#fff1ef; color:var(--red); border:1px solid #f5d2cd; border-radius:4px; padding:0 5px; margin:1px 3px 1px 0; font-size:11px; line-height:18px; }
+.ok-tag { color:var(--green); font-size:12px; }
+.row-editor { margin-top:10px; border:1px solid var(--line); border-radius:8px; padding:10px 12px; max-height:430px; overflow:auto; background:#fbfcfe; }
+.row-editor-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.row-editor-head b { font-size:13px; }
+.row-editor-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; }
+.field-edit label { display:block; font-size:12px; color:var(--sub); margin-bottom:3px; }
+.field-edit input, .field-edit select, .field-edit textarea { width:100%; box-sizing:border-box; height:30px; border:1px solid var(--line); border-radius:6px; padding:0 7px; font-size:13px; }
+.field-edit textarea { height:58px; padding:5px 7px; resize:vertical; }
+.tree-cascade { display:flex; gap:6px; }
+.tree-cascade select { flex:1; min-width:0; }
+.bulk-fields { display:grid; grid-template-columns:1fr; gap:10px; max-height:52vh; overflow:auto; margin:8px 0; }
+.bulk-field label { display:block; font-size:12px; color:var(--sub); margin-bottom:3px; }
+.bulk-field input { width:100%; box-sizing:border-box; height:30px; border:1px solid var(--line); border-radius:6px; padding:0 8px; font-size:13px; }
+.bulk-field { text-align:left; }
+.bulk-line { display:flex; gap:6px; }
+.bulk-line input { flex:1; }
+.bulk-line .btn { height:30px; }
+@media (max-width: 720px) { .row-editor-grid { grid-template-columns:1fr; } #rowFilter { width:100%; } }
+#previewWrap { max-height: 300px; }
