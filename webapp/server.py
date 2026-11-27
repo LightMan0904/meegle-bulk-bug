@@ -74,7 +74,7 @@ def load_layout(pk: str, wt: str) -> dict | None:
             return json.loads(p.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             return None
-    # 兼容别名：URL 里是 simple_name（如 your-space-key），接口用的是 project_key（67e209...）。
+    # 兼容别名：URL 里是 simple_name，接口用的是 project_key（长 ID）。
     # 同一工作项类型只存了一份布局时，直接复用，避免“字段清单又退回 10 个”。
     cands = [f for f in LAYOUT_DIR.glob(f"*__{wt}.json") if f.name != p.name]
     if len(cands) == 1:
@@ -91,6 +91,21 @@ def save_layout(pk: str, wt: str, items: list) -> dict:
     layout_path(pk, wt).write_text(json.dumps(data, ensure_ascii=False, indent=2),
                                    encoding="utf-8")
     return data
+
+
+DEFAULT_LAYOUT_PATH = Path(__file__).with_name("default_layout.json")
+_DEFAULT_LAYOUT = None
+
+
+def load_default_layout() -> dict | None:
+    """页面顺序模板：只含字段/角色名称，不含任何空间 ID。"""
+    global _DEFAULT_LAYOUT
+    if _DEFAULT_LAYOUT is None:
+        try:
+            _DEFAULT_LAYOUT = json.loads(DEFAULT_LAYOUT_PATH.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            _DEFAULT_LAYOUT = {}
+    return _DEFAULT_LAYOUT or None
 
 
 PROFILE_DIR = ROOT / "profiles"
@@ -190,7 +205,16 @@ def form_items(meta: dict, pk: str, wt: str):
         return core.resolve_form_items(meta, layout["items"],
                                        layout.get("project_key") or pk,
                                        layout.get("work_item_type") or wt)
-    # 没有布局：退回「创建表单可写字段」
+    # 没有本机布局：优先用按名称的默认页面布局（24 列）
+    default = load_default_layout()
+    if default and default.get("names"):
+        layout_items = core.layout_items_from_names(
+            meta, default["names"], default.get("required"), default.get("notes"))
+        need = max(5, int(len(default["names"]) * 0.8))
+        if len(layout_items) >= need:
+            return core.resolve_form_items(meta, layout_items, pk, wt)
+
+    # 再退回「创建表单可写字段」
     fields = core.order_fields(core.importable_fields(meta))
     items = [{
         "kind": "field", "field_key": f["field_key"], "field_name": f["field_name"],

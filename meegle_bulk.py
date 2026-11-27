@@ -831,6 +831,36 @@ def resolve_form_items(meta: dict, layout_items: list | None = None,
     return items, missing
 
 
+def layout_items_from_names(meta: dict, names: list, required_names=None, notes=None):
+    """按字段/角色名称生成布局项。
+
+    用于首次运行、本地还没有 layouts/ 的情况：只依赖名称，不硬编码任何
+    空间 ID、字段 ID、角色 ID；真正的 key 在运行时从 meta 里解析。
+    """
+    allf = merge_defs(extract_field_defs(meta.get("create_fields")),
+                      extract_field_defs(meta.get("fields")))
+    roles = meta.get("roles") or []
+    req = set(required_names or [])
+    note_map = notes or {}
+    out = []
+    for name in names or []:
+        target = norm_name(name)
+        f = next((v for v in allf.values()
+                  if norm_name(v.get("field_name")) == target), None)
+        if f:
+            out.append({"kind": "field", "key": f["field_key"],
+                        "name": f["field_name"], "required": name in req,
+                        "note": note_map.get(name, ""), "default": ""})
+            continue
+        r = next((x for x in roles
+                  if norm_name(x.get("role_name") or "") == target), None)
+        if r:
+            out.append({"kind": "role", "key": r["role_id"],
+                        "name": r.get("role_name") or name, "required": name in req,
+                        "note": note_map.get(name, ""), "default": ""})
+    return out
+
+
 def build_template_items(items: list[dict], meta: dict, sheet_title: str = "数据",
                          profiles: dict | None = None):
     """按给定顺序生成模板；每项包含 field_key/field_name/field_type/required/options/note/writable。"""

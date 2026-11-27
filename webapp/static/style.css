@@ -121,6 +121,11 @@ input[type=file] { font-size: 13px; }
 .tbl .s-ok { color: var(--green); }
 .tbl .s-bad { color: var(--red); }
 
+/* 24 列的上传预览：横向滚动，别把列压成一条 */
+#previewTable { min-width: 1600px; table-layout: auto; }
+#previewTable th, #previewTable td { min-width: 90px; white-space: nowrap; }
+#previewTable td.sample { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
 .fields-box { margin-top: 12px; }
 .fields-box summary { cursor: pointer; color: var(--blue); font-size: 13px; }
 .fields-box .table-wrap { max-height: 300px; }
