@@ -1,0 +1,279 @@
+{
+ "project_key": "your-space-key",
+ "type": "BUG",
+ "meta": {
+  "project_key": "your-space-key",
+  "work_item_type": "wenti",
+  "items": [
+   {
+    "kind": "field",
+    "field_key": "name",
+    "role_id": null,
+    "field_name": "标题",
+    "field_type": "text",
+    "required": true,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": []
+   },
+   {
+    "kind": "field",
+    "field_key": "priority",
+    "role_id": null,
+    "field_name": "优先级",
+    "field_type": "select",
+    "required": false,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": [
+     "P0",
+     "P1",
+     "P2"
+    ]
+   },
+   {
+    "kind": "field",
+    "field_key": "description",
+    "role_id": null,
+    "field_name": "问题描述",
+    "field_type": "multi_text",
+    "required": true,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": []
+   },
+   {
+    "kind": "field",
+    "field_key": "template",
+    "role_id": null,
+    "field_name": "问题管理类型",
+    "field_type": "select",
+    "required": true,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": [
+     "示例流程_V2.0",
+     "简易缺陷流程"
+    ]
+   },
+   {
+    "kind": "field",
+    "field_key": "machine_type",
+    "role_id": null,
+    "field_name": "机型",
+    "field_type": "select",
+    "required": true,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": [
+     "小米SU7",
+     "华为问界M9",
+     "中兴R5"
+    ]
+   },
+   {
+    "kind": "field",
+    "field_key": "test_order_type",
+    "role_id": null,
+    "field_name": "测试单类型",
+    "field_type": "select",
+    "required": true,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": [
+     "功能测试",
+     "性能测试"
+    ]
+   },
+   {
+    "kind": "field",
+    "field_key": "field_module",
+    "role_id": null,
+    "field_name": "所属模块",
+    "field_type": "select",
+    "required": true,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": [
+     "蓝牙",
+     "U盘",
+     "摄像头"
+    ]
+   },
+   {
+    "kind": "field",
+    "field_key": "field_product_line",
+    "role_id": null,
+    "field_name": "所属产品线",
+    "field_type": "select",
+    "required": true,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": [
+     "商用车记录仪",
+     "乘用车TBOX"
+    ]
+   },
+   {
+    "kind": "field",
+    "field_key": "reporter",
+    "role_id": null,
+    "field_name": "报告人",
+    "field_type": "user",
+    "required": false,
+    "writable": true,
+    "note": "",
+    "default": "",
+    "is_new": false,
+    "options": []
+   },
+   {
+    "kind": "field",
+    "field_key": "attachment",
+    "role_id": null,
+    "field_name": "附件",
+    "field_type": "multi-file",
+    "required": false,
+    "writable": false,
+    "note": "管理员新增的创建字段",
+    "default": "",
+    "is_new": true,
+    "options": []
+   }
+  ],
+  "all_field_count": 11,
+  "create_field_count": 10,
+  "template_options": [
+   "示例流程_V2.0",
+   "简易缺陷流程"
+  ]
+ },
+ "upload": {
+  "upload_id": "demo",
+  "filename": "BUG批量导入_模板.xlsx",
+  "sheets": [
+   "Sheet1"
+  ],
+  "sheet": "Sheet1",
+  "headers": [
+   "标题*",
+   "机型*",
+   "问题描述*",
+   "问题管理类型*",
+   "测试单类型*",
+   "所属模块*",
+   "所属产品线*",
+   "优先级",
+   "报告人"
+  ],
+  "row_count": 3,
+  "preview": [
+   [
+    "蓝牙偶发断连-001",
+    "小米SU7",
+    "步骤：1.连接蓝牙 2.放置10分钟\n预期：不断连\n实际：断开",
+    "示例流程_V2.0",
+    "功能测试",
+    "蓝牙",
+    "商用车记录仪",
+    "P1",
+    "张三"
+   ],
+   [
+    "U盘识别失败-002",
+    "华为问界M9",
+    "插U盘无反应",
+    "示例流程_V2.0",
+    "功能测试",
+    "U盘",
+    "乘用车TBOX",
+    "P2",
+    "李四"
+   ],
+   [
+    "摄像头花屏-003",
+    "中兴R5",
+    "720p 预览花屏",
+    "示例流程_V2.0",
+    "性能测试",
+    "摄像头",
+    "商用车记录仪",
+    "P1",
+    "王五"
+   ]
+  ],
+  "mapping": {
+   "0": "name",
+   "1": "machine_type",
+   "2": "description",
+   "3": "template",
+   "4": "test_order_type",
+   "5": "field_module",
+   "6": "field_product_line",
+   "7": "priority",
+   "8": "reporter"
+  }
+ },
+ "mapping": {
+  "0": "name",
+  "1": "machine_type",
+  "2": "description",
+  "3": "template",
+  "4": "test_order_type",
+  "5": "field_module",
+  "6": "field_product_line",
+  "7": "priority",
+  "8": "reporter"
+ },
+ "issues": [
+  {
+   "row": 4,
+   "title": "摄像头花屏-003",
+   "errors": [
+    {
+     "col": "机型*",
+     "msg": "「不存在的机型」不是 机型 的合法选项"
+    }
+   ]
+  }
+ ],
+ "results": [
+  {
+   "row": 2,
+   "title": "蓝牙偶发断连-001",
+   "status": "成功",
+   "id": "6812345678901",
+   "error": ""
+  },
+  {
+   "row": 3,
+   "title": "U盘识别失败-002",
+   "status": "成功",
+   "id": "6812345678902",
+   "error": ""
+  },
+  {
+   "row": 4,
+   "title": "摄像头花屏-003",
+   "status": "失败",
+   "id": "",
+   "error": "机型：不是合法选项"
+  }
+ ]
+}

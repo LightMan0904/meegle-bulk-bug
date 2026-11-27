@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飞书项目 · 批量建单器</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">M</span>
+    <span>飞书项目 · 批量建单器</span>
+    <span class="badge">本地运行</span>
+  </div>
+  <div class="user" id="userBox">未检查登录</div>
+</header>
+
+<main>
+  <div class="intro">
+    用你自己的飞书项目账号批量创建需求 / 缺陷 / 任务等任何工作项，<b>不需要空间管理员开「Excel 导入」权限</b>。
+    数据只在本机处理，不会上传到任何第三方服务。
+  </div>
+
+  <section class="card" id="card1">
+    <div class="card-head">
+      <span class="num">1</span><h2>连接账号</h2>
+      <span class="hint">复用本机的 meegle CLI 登录态</span>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="btnLogin">扫码登录</button>
+      <button class="btn" id="btnStatus">检查登录状态</button>
+      <span class="msg" id="statusMsg"></span>
+    </div>
+    <div class="detail hidden" id="loginHelp">
+      还没登录。点上面的「扫码登录」，用手机飞书扫二维码即可，全程在这个页面完成，不会弹英文终端菜单。
+      <details>
+        <summary>命令行方式（可选，给脚本用户）</summary>
+        <code>npx -y @lark-project/meegle@latest auth login --device-code --host project.feishu.cn</code>
+      </details>
+    </div>
+  </section>
+
+  <section class="card locked" id="card2">
+    <div class="card-head">
+      <span class="num">2</span><h2>选择空间与工作项类型</h2>
+      <span class="hint">支持你所有有权限的空间</span>
+    </div>
+    <div class="row">
+      <label class="field">
+        <span>空间 key</span>
+        <input id="projectKey" placeholder="例如 your-space-key" autocomplete="off" list="projectList">
+        <datalist id="projectList"></datalist>
+      </label>
+      <button class="btn" id="btnTypes">加载类型</button>
+      <label class="field grow">
+        <span>工作项类型</span>
+        <select id="typeSelect" disabled><option value="">先加载类型…</option></select>
+      </label>
+      <button class="btn primary" id="btnMeta" disabled>加载字段</button>
+      <button class="btn" id="btnRefreshMeta" disabled title="重新拉取字段/选项/角色，管理员改过配置后用">刷新字段</button>
+    </div>
+    <div class="msg" id="metaMsg"></div>
+  </section>
+
+  <section class="card locked" id="card3">
+    <div class="card-head">
+      <span class="num">3</span><h2>字段与模板</h2>
+      <span class="hint">字段从你们空间实时读取</span>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnTemplate" disabled>下载 Excel 模板</button>
+      <button class="btn small" id="btnResetOrder" disabled>恢复默认顺序</button>
+      <span class="msg" id="fieldsSummary">尚未加载字段</span>
+    </div>
+    <details class="fields-box">
+      <summary>查看字段清单</summary>
+      <div class="table-wrap"><table class="tbl" id="fieldsTable"></table></div>
+    </details>
+  </section>
+
+  <section class="card locked" id="card4">
+    <div class="card-head">
+      <span class="num">4</span><h2>上传数据</h2>
+      <span class="hint">.xlsx 或 .csv，第一行是表头</span>
+    </div>
+    <div class="row">
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.csv">
+      <label class="field hidden" id="sheetWrap">
+        <span>工作表</span>
+        <select id="sheetSelect"></select>
+      </label>
+      <span class="msg" id="uploadMsg"></span>
+    </div>
+    <div class="table-wrap hidden" id="previewWrap">
+      <table class="tbl" id="previewTable"></table>
+    </div>
+  </section>
+
+  <section class="card locked" id="card5">
+    <div class="card-head">
+      <span class="num">5</span><h2>列映射</h2>
+      <span class="hint">表头 → 空间字段，自动匹配后可手工调整</span>
+    </div>
+    <div class="row">
+      <button class="btn small" id="btnRemap">重新自动匹配</button>
+      <span class="msg" id="mapMsg"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl" id="mapTable"></table>
+    </div>
+
+    <div class="hidden" id="relBox" style="margin-top:14px">
+      <div class="row">
+        <h3 style="margin:0;font-size:14px">关联字段（可直接搜索选择）</h3>
+        <span class="msg">输入关键字搜索空间里的工作项，选中后自动填工作项 ID</span>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl" id="relTable"></table>
+      </div>
+      <datalist id="relList"></datalist>
+    </div>
+  </section>
+
+  <section class="card locked" id="card6">
+    <div class="card-head">
+      <span class="num">6</span><h2>校验</h2>
+      <span class="hint">不写数据，只检查必填/枚举/人员</span>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnValidate">开始校验</button>
+      <span class="msg" id="validateMsg"></span>
+    </div>
+    <div class="issues hidden" id="issuesBox"></div>
+  </section>
+
+  <section class="card locked" id="card7">
+    <div class="card-head">
+      <span class="num">7</span><h2>执行</h2>
+      <span class="hint">先预演，确认后取消勾选再真跑</span>
+    </div>
+    <div class="row wrap">
+      <label class="field">
+        <span>流程/模板</span>
+        <select id="templateSelect"><option value="">（不指定）</option></select>
+      </label>
+      <label class="field">
+        <span>每条间隔(秒)</span>
+        <input id="delayInput" type="number" min="0" step="0.1" value="0.4" style="width:90px">
+      </label>
+      <label class="field">
+        <span>只跑前 N 条</span>
+        <input id="limitInput" type="number" min="0" step="1" value="0" placeholder="0=全部" style="width:90px">
+      </label>
+      <label class="check"><input type="checkbox" id="dryRun" checked> 预演模式（不真正创建）</label>
+      <button class="btn primary" id="btnStart">开始执行</button>
+      <button class="btn danger hidden" id="btnStop">停止</button>
+    </div>
+
+    <div class="progress hidden" id="progressBox">
+      <div class="bar"><div class="fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText"></div>
+    </div>
+
+    <div class="result-actions hidden" id="resultActions">
+      <button class="btn" id="btnDownload">下载结果 Excel</button>
+      <span class="msg" id="resultMsg"></span>
+    </div>
+
+    <div class="table-wrap hidden" id="resultWrap">
+      <table class="tbl" id="resultTable"></table>
+    </div>
+
+    <pre class="log hidden" id="logBox"></pre>
+  </section>
+</main>
+
+<!-- 登录弹窗 -->
+<div class="modal hidden" id="loginModal">
+  <div class="modal-mask" id="loginMask"></div>
+  <div class="modal-card">
+    <button class="modal-x" id="btnCloseLogin" title="关闭">×</button>
+    <h3 id="loginTitle">扫码登录飞书项目</h3>
+    <p class="modal-sub" id="loginSub">用手机飞书扫描二维码，确认授权后会自动完成登录</p>
+
+    <label class="host-row">登录环境
+      <select id="hostSelect">
+        <option value="project.feishu.cn">飞书项目（中国）</option>
+        <option value="meegle.com">Meegle（国际版）</option>
+      </select>
+    </label>
+
+    <div class="qr-box"><div id="qrCanvas"></div></div>
+
+    <div class="code-row">验证码 <b id="loginCode">--------</b>
+      <button class="btn small" id="btnCopyCode">复制</button>
+    </div>
+    <div class="login-status" id="loginStatus">正在生成二维码…</div>
+
+    <div class="modal-actions">
+      <a class="btn" id="loginLink" target="_blank" rel="noopener">在浏览器打开授权页</a>
+      <button class="btn" id="btnRelogin">刷新二维码</button>
+      <button class="btn primary" id="btnCloseLogin2">关闭</button>
+    </div>
+    <p class="modal-tip">二维码 30 分钟内有效。如果手机扫不出来，点「在浏览器打开授权页」，输入上面的验证码也能完成登录。</p>
+  </div>
+</div>
+
+<script>window.__TOKEN__ = "%%TOKEN%%";</script>
+<script src="/static/qrcode.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

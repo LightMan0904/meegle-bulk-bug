@@ -1,0 +1,12 @@
+{
+  "project_key": "your-space-key",
+  "work_item_type": "wenti",
+  "excel": "BUG批量导入_模板.xlsx",
+  "sheet": "",
+  "header_row": 1,
+  "template_name": "示例流程_V2.0",
+  "rate_limit_seconds": 0.4,
+  "max_retries": 4,
+  "link_template": "https://project.feishu.cn/{project_key}/{work_item_type}/detail/{id}",
+  "meegle_cmd": ""
+}
